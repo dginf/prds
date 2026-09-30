@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Painel dos PRDs — SDR/MIDR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+<style>
+/* Layout: mesmo padrão do Painel PNDR — cabeçalho, abas, barra lateral de filtros fixa e área principal em cards */
+:root{
+  color-scheme:light;
+  --pr:#1565c0;--pd:#0d3e8a;--sc:#009C3B;--bg:#E8E8E8;--card:#fff;
+  --ink:#232323;--soft:#666;--line:#e0e0e0;--tint:#fafbfd;--tint2:#f0f5fb;--sel:#e3edf9;
+  --gn:#009C3B;--am:#b6790a;--rd:#c62828;--sh:0 2px 8px rgba(0,0,0,.10);
+  /* planos */
+  --prda:#0a9396;--prdco:#c2185b;--prdne:#1565c0;
+  /* situação frente à meta */
+  --pc:#1565c0;--pcd:#0d3e8a;
+  --s-ok:#1b7a3a;--s-av:#8bc34a;--s-es:#78909c;--s-aq:#e0a100;--s-rt:#c62828;--s-na:#bdbdbd;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Roboto',Arial,sans-serif;font-size:14px;}
+header{padding:14px 24px 0;max-width:1440px;margin:0 auto;}
+.dh{background:var(--card);border-radius:8px;padding:16px 22px;margin-bottom:10px;box-shadow:var(--sh);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+.dh h1{font-size:22px;font-weight:700;margin:0 0 2px;color:var(--pr);}
+.dh p{font-size:12px;color:var(--soft);margin:0;}
+.dh .upd{font-size:11px;color:var(--soft);text-align:right;line-height:1.5;}
+nav{display:flex;gap:5px;flex-wrap:wrap;max-width:1440px;margin:0 auto 10px;padding:0 24px;}
+nav a{color:var(--soft);text-decoration:none;font-size:12.5px;font-weight:500;padding:7px 15px;border-radius:6px;cursor:pointer;background:var(--card);box-shadow:var(--sh);}
+nav a:focus-visible,.itag:focus-visible,.kc:focus-visible,.mini-card:focus-visible{outline:2px solid var(--pd);outline-offset:2px;}
+nav a.active{color:#fff;background:var(--pr);}
+.layout{display:flex;gap:14px;padding:0 24px 40px;max-width:1440px;margin:0 auto;}
+/* BARRA DE PLANOS */
+.plbar{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;max-width:1440px;margin:0 auto 12px;padding:0 24px;}
+.plb{--c:var(--pr);background:var(--card);border-radius:8px;box-shadow:var(--sh);padding:10px 14px 9px;cursor:pointer;border:none;border-top:5px solid var(--c);text-align:left;font-family:inherit;color:var(--ink);min-width:0;transition:transform .12s,box-shadow .12s;}
+.plb:hover{box-shadow:0 4px 14px rgba(0,0,0,.16);}
+.plb:focus-visible{outline:2px solid var(--c);outline-offset:2px;}
+.plb .t{font-size:17px;font-weight:700;color:var(--c);line-height:1.1;}
+.plb .t small{font-size:11px;font-weight:500;color:var(--soft);margin-left:4px;}
+.plb .s{font-size:11px;color:var(--soft);margin-top:3px;}
+.plb .sbar{margin:7px 0 0;height:6px;}
+.plb.on{background:var(--c);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.2);}
+.plb.on .t,.plb.on .t small,.plb.on .s{color:#fff;}
+.plb.on .sbar{box-shadow:0 0 0 2px rgba(255,255,255,.9);background:rgba(255,255,255,.9);}
+.plb.off{opacity:.62;}
+.plb.off:hover{opacity:1;}
+/* SEÇÃO DE PLANO */
+.plsec{border-radius:8px;box-shadow:var(--sh);margin-bottom:14px;background:var(--card);overflow:hidden;border-top:5px solid var(--c);}
+.plhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:11px 16px;background:color-mix(in srgb,var(--c) 9%,#fff);border-bottom:1px solid color-mix(in srgb,var(--c) 25%,#fff);}
+.plhead .sg{font-size:18px;font-weight:700;color:var(--c);}
+.plhead .nm{font-size:12px;color:var(--ink);font-weight:500;}
+.plhead .ct{font-size:11.5px;color:var(--soft);margin-left:auto;}
+.plsec .body{padding:12px 16px;}
+.plsec .body.flush{padding:0 0 4px;}
+.plsec .desc{font-size:11.5px;color:var(--soft);margin-bottom:8px;line-height:1.5;}
+.plsec h2{font-size:13px;margin:0 0 2px;font-weight:700;}
+.pc.clk{cursor:pointer;transition:box-shadow .15s;}.pc.clk:hover{box-shadow:0 4px 14px rgba(0,0,0,.16);}
+.hero .doc{color:#fff;font-size:12px;opacity:.9;}
+.plsec table th{background:color-mix(in srgb,var(--c) 4%,#fff);}
+.ex-row td{background:color-mix(in srgb,var(--c) 6%,#fff)!important;font-weight:700;color:var(--c);font-size:11px;}
+.subtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.subtab{--c:var(--pr);border:1.5px solid var(--c);color:var(--c);background:#fff;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.subtab.on{background:var(--c);color:#fff;}
+/* SIDEBAR */
+.sb{width:258px;flex:0 0 258px;background:var(--card);border-radius:8px;padding:14px;box-shadow:var(--sh);position:sticky;top:10px;max-height:calc(100vh - 20px);overflow-y:auto;align-self:flex-start;}
+.sb h3{font-size:11px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+.grp{margin-bottom:9px;}
+.gl{font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--soft);text-transform:uppercase;margin-bottom:3px;}
+select,input[type=text]{width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:12px;color:var(--ink);background:#fff;font-family:inherit;}
+.div{height:1px;background:var(--line);margin:9px 0;}
+.nb{border-left:4px solid var(--sc);background:#f4faf6;border-radius:6px;padding:9px 9px 5px;margin-bottom:9px;}
+.nb .gl{color:var(--sc);font-weight:700;}
+.fr{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 0;font-size:11.5px;}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex-shrink:0;}
+.seg button{border:none;background:#fff;font-size:9.5px;padding:2px 5px;color:var(--soft);cursor:pointer;font-family:inherit;}
+.seg button.on{background:var(--sc);color:#fff;}
+.seg button+button{border-left:1px solid var(--line);}
+.sb-count{font-size:11.5px;color:var(--soft);margin:4px 0 8px;}
+.sb-count b{color:var(--pr);font-size:15px;}
+.btn-clr{width:100%;border:1px solid var(--line);background:var(--tint);border-radius:6px;padding:6px;font-size:11.5px;color:var(--soft);cursor:pointer;font-family:inherit;}
+.btn-clr:hover{border-color:var(--pr);color:var(--pr);}
+/* MAIN */
+main{flex:1;min-width:0;width:100%;}
+.tb{margin-bottom:10px;}
+.tb h1{font-size:19px;margin:0 0 2px;font-weight:700;}
+.tb .sub{font-size:11.5px;color:var(--soft);}
+.tb-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.tb-top .tb{margin-bottom:0;}
+.card{background:var(--card);border-radius:8px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--sh);min-width:0;}
+.card h2{font-size:14px;margin:0 0 2px;font-weight:700;}
+.card .desc{font-size:11.5px;color:var(--soft);margin-bottom:8px;line-height:1.5;}
+.cw{height:260px;position:relative;}.cw2{height:210px;position:relative;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+/* KPI */
+.kg4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.kc{background:var(--tint);border:1px solid var(--line);border-radius:7px;padding:9px 12px;border-left:3px solid var(--pr);min-width:0;}
+.kc.clk{cursor:pointer;transition:border-color .15s;}
+.kc.clk:hover{border-left-color:var(--pd);background:#eef4fb;}
+.kc.active{background:var(--sel);}
+.kl{font-size:9.5px;font-weight:700;text-transform:uppercase;color:var(--soft);margin-bottom:2px;letter-spacing:.03em;}
+.kv{font-size:18px;font-weight:700;color:var(--pr);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+.kv small{font-size:11px;font-weight:500;color:var(--soft);}
+.kd{font-size:10.5px;margin-top:2px;color:var(--soft);line-height:1.4;}
+.kd.p{color:var(--gn);}.kd.n{color:var(--rd);}
+/* SELETOR DE INDICADORES */
+.ind-panel{background:var(--card);border-radius:8px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--sh);}
+.ind-panel-title{font-size:12px;font-weight:700;color:var(--pr);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;}
+.ind-grupo-row{display:flex;align-items:stretch;margin-bottom:6px;border:1px solid var(--line);border-radius:7px;overflow:hidden;}
+.ind-grupo-label{background:var(--tint2);border-right:1px solid var(--line);padding:8px 12px;min-width:190px;max-width:190px;font-size:11px;font-weight:700;color:var(--pr);line-height:1.4;display:flex;align-items:center;}
+.ind-grupo-tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 12px;flex:1;align-items:center;min-width:0;}
+.itag{padding:4px 11px 4px 9px;border-radius:20px;font-size:11px;border:1.5px solid var(--line);cursor:pointer;background:var(--tint);color:var(--soft);user-select:none;white-space:nowrap;transition:all .12s;display:inline-flex;align-items:center;gap:5px;font-family:inherit;}
+.itag:hover{border-color:var(--pr);color:var(--pr);}
+.itag.active{background:var(--pr);border-color:var(--pr);color:#fff;}
+.itag .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 1.5px #fff;}
+/* BARRA DO INDICADOR SELECIONADO */
+.ind-info{background:var(--pr);border-radius:8px;box-shadow:var(--sh);padding:11px 16px;margin-bottom:12px;color:#fff;}
+.ind-info .nm{font-size:16px;font-weight:600;line-height:1.35;text-wrap:balance;}
+.ind-info .mt{font-size:11.5px;color:#d5e4f7;margin-top:3px;line-height:1.5;}
+/* TABELA */
+.tw{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:11.5px;}
+th{text-align:left;color:var(--soft);font-weight:700;font-size:10px;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--tint);white-space:nowrap;}
+td{padding:6px 8px;border-bottom:1px solid #f1f2f5;vertical-align:top;}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+th.num{white-space:nowrap;}td.num{min-width:92px;}
+tr.clk{cursor:pointer;}
+tr:hover td{background:var(--tint2);}
+.bn{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;white-space:nowrap;}
+.pl{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;color:#fff;letter-spacing:.02em;}
+.warn{color:var(--am);font-weight:700;cursor:help;}
+.pgw{display:flex;align-items:center;gap:6px;min-width:120px;}
+.pgb{flex:1;height:6px;background:#eceff3;border-radius:3px;overflow:hidden;position:relative;}
+.pgb i{display:block;height:100%;border-radius:3px;}
+.pgb .tick{position:absolute;top:-2px;bottom:-2px;left:100%;width:0;}
+.pgv{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--soft);min-width:40px;text-align:right;}
+.leg{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;}
+.li{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--soft);}
+.ld{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+/* HERO */
+.hero{background:linear-gradient(135deg,var(--pcd),var(--pc));border-radius:8px;padding:28px 28px 30px;color:#fff;margin-bottom:12px;box-shadow:var(--sh);}
+.hero h2{font-size:25px;font-weight:700;margin:0 0 5px;text-wrap:balance;}
+.hero p{color:#cfe0f7;font-size:13.5px;margin:0 0 18px;max-width:760px;line-height:1.55;}
+.hero-search{max-width:520px;display:flex;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.2);}
+.hero-search input{flex:1;border:none;padding:11px 14px;font-size:13px;font-family:inherit;color:var(--ink);min-width:0;}
+.hero-search input:focus{outline:none;}
+.hero-res{background:#fff;border-radius:8px;padding:6px 0;margin-top:8px;max-width:520px;max-height:220px;overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.2);}
+.hero-res div{padding:6px 14px;cursor:pointer;font-size:12.5px;color:var(--ink);}
+.hero-res div:hover{background:#eef4fb;}
+.mini-card{background:var(--card);border-radius:8px;padding:14px;box-shadow:var(--sh);cursor:pointer;transition:box-shadow .15s,border-color .15s;border:1px solid var(--line);min-width:0;}
+.mini-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.15);border-color:var(--pr);}
+.mini-card b{display:block;font-size:12.5px;color:var(--ink);margin-bottom:3px;}
+.mini-card p{font-size:11px;color:var(--soft);margin:0;line-height:1.5;}
+.mini-card .ic{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--pr);margin-bottom:6px;}
+/* CARD DE PLANO */
+.pc{background:var(--card);border-radius:8px;padding:14px 16px;box-shadow:var(--sh);border-top:4px solid var(--c);min-width:0;}
+.pc .sg{font-size:18px;font-weight:700;color:var(--c);}
+.pc .nm{font-size:11.5px;color:var(--soft);margin:2px 0 10px;line-height:1.45;}
+.pc .row{display:flex;justify-content:space-between;font-size:11.5px;padding:3px 0;border-top:1px solid #f1f2f5;}
+.pc .row b{font-variant-numeric:tabular-nums;}
+.pc a{font-size:11px;color:var(--pr);}
+.sbar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0 6px;gap:2px;background:#fff;}
+.sbar span{display:block;height:100%;}
+/* FICHA */
+.fic{display:grid;grid-template-columns:170px 1fr;gap:0;font-size:12px;}
+.fic div{padding:6px 8px;border-bottom:1px solid #f1f2f5;line-height:1.5;min-width:0;overflow-wrap:anywhere;}
+.fic div:nth-child(odd){color:var(--soft);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;background:var(--tint);}
+.nota{border-left:4px solid var(--am);background:#fff8e6;border-radius:6px;padding:9px 12px;font-size:12px;line-height:1.55;margin-top:10px;}
+.nota b{color:#7a5200;}
+.nota.info{border-left-color:var(--pr);background:#eef4fb;}
+.nota.info b{color:var(--pd);}
+/* METODOLOGIA */
+.met-secao{margin-bottom:12px;}
+.met-secao h3{font-size:15px;color:var(--pr);margin:0 0 8px;font-weight:700;border-left:4px solid var(--pr);padding-left:10px;}
+.met-secao p{line-height:1.7;color:var(--ink);font-size:13px;margin:0 0 8px;max-width:980px;}
+.met-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;}
+.met-item{border-left:4px solid var(--c,var(--pr));background:var(--tint);border-radius:6px;padding:10px 14px;}
+.met-item b{color:var(--pr);font-size:12.5px;display:block;margin-bottom:3px;}
+.met-item p{font-size:12px;color:var(--soft);margin:0;line-height:1.6;}
+.btn-dl{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;border:1.5px solid var(--pr);color:var(--pr);background:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;}
+.btn-dl:hover{background:var(--pr);color:#fff;}
+.vazio{padding:28px;text-align:center;color:var(--soft);font-size:13px;}
+.rodape{text-align:center;padding:16px;color:var(--soft);font-size:11.5px;border-top:1px solid var(--line);max-width:1440px;margin:0 auto;}
+a{color:var(--pr);}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:960px){
+  .plbar{grid-template-columns:1fr 1fr;}
+  .layout{flex-direction:column;}.sb{width:100%;flex:none;position:relative;max-height:none;top:0;}
+  .g2,.g3{grid-template-columns:1fr;}.kg4{grid-template-columns:repeat(2,1fr);}
+  .ind-grupo-row{flex-direction:column;}.ind-grupo-label{border-right:none;border-bottom:1px solid var(--line);min-width:unset;max-width:none;width:100%;}
+  .met-grid{grid-template-columns:1fr;}
+}
+@media(max-width:600px){
+  header,.layout,nav,.plbar{padding-left:16px;padding-right:16px;}
+  .fic{grid-template-columns:1fr;}
+  .hero{padding:22px 18px;}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+</style>
+</head>
+<body>
+<header><div class="dh"><div><h1>Painel de Indicadores dos PRDs</h1><p>Planos Regionais de Desenvolvimento da Amazônia, do Centro-Oeste e do Nordeste 2024–2027 · SDR / DGINF — Ministério da Integração e do Desenvolvimento Regional</p></div><div class="upd" id="upd"></div></div></header>
+<nav id="nav"><a data-view="principal" class="active" tabindex="0">Principal</a><a data-view="metas" tabindex="0">Painel de Metas</a><a data-view="indicador" tabindex="0">Evolução do Indicador</a><a data-view="eixos" tabindex="0">Por Eixo</a><a data-view="qualidade" tabindex="0">Qualidade dos Dados</a><a data-view="metodologia" tabindex="0">Metodologia</a></nav>
+<div class="plbar" id="plbar" role="tablist" aria-label="Plano regional"></div>
+<div class="layout">
+<aside class="sb" id="sb">
+<h3>Filtros</h3>
+<div class="grp"><div class="gl">Eixo</div><select id="f-ex"></select></div>
+<div class="grp"><div class="gl">Situação frente à meta</div><select id="f-st"></select></div>
+<div class="grp"><div class="gl">Origem do dado mais recente</div><select id="f-or"><option value="all">Todas</option><option>Publicado pela fonte</option><option>Calculado</option><option>Proxy / estimativa</option></select></div>
+<div class="grp"><div class="gl">Buscar indicador</div><input type="text" id="f-bu" placeholder="Nome, código ou fonte..."></div>
+<div class="nb">
+<div class="gl">Características</div>
+<div class="fr"><span>Linha de base com valor</span><div class="seg" id="sg-lb"><button data-v="all" class="on">Todos</button><button data-v="1">Sim</button><button data-v="0">Não</button></div></div>
+<div class="fr"><span>Ressalva de comparabilidade</span><div class="seg" id="sg-rs"><button data-v="all" class="on">Todos</button><button data-v="1">Sim</button><button data-v="0">Não</button></div></div>
+<div class="fr"><span>Recorte por bioma/UF</span><div class="seg" id="sg-rc"><button data-v="all" class="on">Todos</button><button data-v="1">Sim</button><button data-v="0">Não</button></div></div>
+</div>
+<div class="nb" style="border-left-color:#1B4FA8;background:#EEF4FF">
+<div class="gl" style="color:#1B4FA8">Polaridade</div>
+<div class="fr"><span>Quanto maior, melhor</span><div class="seg" id="sg-pm"><button data-v="all" class="on">Todos</button><button data-v="1">Sim</button><button data-v="0">Não</button></div></div>
+</div>
+<div class="div"></div>
+<div class="sb-count" id="sb-count"></div>
+<button class="btn-clr" id="btn-clr">Limpar filtros</button>
+</aside>
+<main id="main"></main>
+</div>
+<div id="loading" style="display:flex;position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="width:48px;height:48px;border:4px solid #e0e8f4;border-top:4px solid var(--pr);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <div style="font-size:14px;color:var(--pr);font-weight:600;" id="loading-msg">Carregando dados do painel...</div>
+</div>
+<div class="rodape">Painel de Indicadores dos PRDs — SDR / DGINF · MIDR · Fontes: PRDA, PRDCO e PRDNE 2024–2027 e séries oficiais indicadas em cada indicador</div>
+
+<script>
+/* ============ ESTADO E CONSTANTES ============ */
+var D=null, IND=[], charts={};
+var S={view:'principal',pl:'all',ex:'all',st:'all',or:'all',bu:'',lb:'all',rs:'all',rc:'all',pm:'all',ind:null};
+var SIT=[
+  {k:'Meta alcançada',c:'--s-ok',bg:'#d4edda',fg:'#155724',d:'O valor mais recente já atinge ou supera a meta.'},
+  {k:'Avançando',c:'--s-av',bg:'#e8f5d6',fg:'#3b6b12',d:'Movimento na direção desejada desde a linha de base, ainda sem atingir a meta.'},
+  {k:'Estável',c:'--s-es',bg:'#eceff1',fg:'#455a64',d:'Sem variação desde a linha de base.'},
+  {k:'Aquém da meta, sem linha de base',c:'--s-aq',bg:'#fff3cd',fg:'#856404',d:'Meta comparável não atingida; sem valor-base publicado para medir a trajetória.'},
+  {k:'Em retrocesso',c:'--s-rt',bg:'#f8d7da',fg:'#721c24',d:'Movimento na direção contrária à desejada desde a linha de base.'},
+  {k:'Sem avaliação',c:'--s-na',bg:'#f1f1f1',fg:'#555',d:'Meta não comparável em nível, sem meta numérica ou sem observação posterior à base.'}
+];
+var SITMAP={};SIT.forEach(function(s){SITMAP[s.k]=s;});
+var PLC={PRDA:'--prda',PRDCO:'--prdco',PRDNE:'--prdne'};
+var PLORD=['PRDA','PRDCO','PRDNE'];
+var EIXOS=[['M','Macroindicadores'],['1','Desenvolvimento produtivo'],['2','Ciência, tecnologia e inovação'],['3','Infraestrutura econômica e urbana'],['4','Meio ambiente'],['5','Capacidades governativas'],['6','Desenvolvimento social'],['7','Educação']];
+function cv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+function sitCor(k){return cv((SITMAP[k]||SIT[5]).c);}
+function plCor(p){return cv(PLC[p]);}
+function esc(s){return s==null?'':String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+/* ============ FORMATAÇÃO ============ */
+function casas(v,un){
+  var a=Math.abs(v);
+  if(un==='índice') return a<10?3:2;
+  if(a>=1000) return 0;
+  if(a>=100) return 1;
+  if(a>=1) return 2;
+  return 3;
+}
+function fmt(v,un,dec){
+  if(v==null||isNaN(v)) return '—';
+  var d=dec!=null?dec:casas(v,un);
+  return v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:d});
+}
+function fmtU(v,un){
+  if(v==null) return '—';
+  var s=fmt(v,un);
+  if(!un||un==='unidade') return s;
+  if(un==='%') return s+'%';
+  return s+' '+un;
+}
+function fmtPct(p){if(p==null) return '—';return (p*100).toLocaleString('pt-BR',{maximumFractionDigits:0})+'%';}
+function sinal(v,dec){if(v==null) return '—';return (v>0?'+':'')+v.toLocaleString('pt-BR',{maximumFractionDigits:dec==null?2:dec});}
+function plBadge(p){return '<span class="pl" style="background:var('+PLC[p]+')">'+p+'</span>';}
+function sitBadge(k){var s=SITMAP[k]||SIT[5];return '<span class="bn" style="background:'+s.bg+';color:'+s.fg+'" title="'+esc(s.d)+'">'+esc(k)+'</span>';}
+function nomeCurto(i){return i.nome+(i.recorte?' — '+i.recorte:'');}
+function metaTxt(i){
+  var a=i.aval;
+  if(a.modo==='relativa') return a.meta_rel==null?'—':(sinal(a.meta_rel,1)+(i.un_meta==='pontos percentuais'?' p.p.':'%')+' até 2027');
+  if(a.meta_ref==null) return '—';
+  return fmtU(a.meta_ref,i.un)+(a.ano_meta===2030?' (2030)':'');
+}
+function baseTxt(i){
+  if(i.lb_val!=null) return fmtU(i.lb_val,i.un)+' ('+i.lb_ano+')';
+  if(i.aval.base_calc) return fmtU(i.aval.base_calc.v,i.un)+' ('+i.aval.base_calc.p+')*';
+  return i.lb_ano?'— ('+i.lb_ano+')':'—';
+}
+function progHTML(i){
+  var p=i.aval.progresso, c=sitCor(i.aval.situacao);
+  if(p==null) return '<div class="pgw"><div class="pgb"></div><span class="pgv">—</span></div>';
+  var w=Math.max(0,Math.min(1,p))*100;
+  return '<div class="pgw" title="Progresso rumo à meta: '+fmtPct(p)+'"><div class="pgb"><i style="width:'+w+'%;background:'+c+'"></i></div><span class="pgv">'+fmtPct(p)+'</span></div>';
+}
+
+/* ============ CARGA ============ */
+function carregarDados(){
+  fetch('dados/prd.json').then(function(r){if(!r.ok) throw new Error(r.status);return r.json();}).then(function(d){
+    D=d;IND=d.ind;
+    document.getElementById('loading').style.display='none';
+    document.getElementById('upd').innerHTML='Base atualizada em<br><b>'+(d.meta.atualizacao?d.meta.atualizacao.split('-').reverse().join('/'):'—')+'</b>';
+    buildSB();buildNav();
+    var h=(location.hash||'').replace('#','');
+    if(h&&document.querySelector('nav a[data-view="'+h+'"]')) S.view=h;
+    irPara(S.view);
+  }).catch(function(e){
+    document.getElementById('loading-msg').innerHTML='Não foi possível carregar <code>dados/prd.json</code> ('+esc(e.message)+').<br>Abra o painel por um servidor web (GitHub Pages ou <code>python -m http.server</code>).';
+  });
+}
+
+/* ============ FILTROS ============ */
+function buildSB(){
+  var fe=document.getElementById('f-ex');
+  fe.innerHTML='<option value="all">Todos os eixos</option>'+EIXOS.map(function(e){return '<option value="'+e[0]+'">'+(e[0]==='M'?'':e[0]+'. ')+e[1]+'</option>';}).join('');
+  var fs=document.getElementById('f-st');
+  fs.innerHTML='<option value="all">Todas</option>'+SIT.map(function(s){return '<option>'+s.k+'</option>';}).join('');
+  [['f-ex','ex'],['f-st','st'],['f-or','or']].forEach(function(p){
+    document.getElementById(p[0]).addEventListener('change',function(e){S[p[1]]=e.target.value;onFiltro();});
+  });
+  document.getElementById('f-bu').addEventListener('input',function(e){S.bu=e.target.value;onFiltro();});
+  ['lb','rs','rc','pm'].forEach(function(k){
+    var g=document.getElementById('sg-'+k);
+    g.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){
+      g.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');S[k]=b.dataset.v;onFiltro();
+    });});
+  });
+  document.getElementById('btn-clr').addEventListener('click',limparFiltros);
+}
+function limparFiltros(){
+  S.pl=S.ex=S.st=S.or=S.lb=S.rs=S.rc=S.pm='all';S.bu='';
+  ['f-ex','f-st','f-or'].forEach(function(id){document.getElementById(id).value='all';});
+  document.getElementById('f-bu').value='';
+  document.querySelectorAll('.seg').forEach(function(g){g.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b.dataset.v==='all');});});
+  onFiltro();
+}
+function setFiltro(k,v){
+  S[k]=v;var map={ex:'f-ex',st:'f-st',or:'f-or'};
+  if(map[k]) document.getElementById(map[k]).value=v;
+}
+function norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+function filt(ign){
+  ign=ign||{};
+  var b=norm(S.bu);
+  return IND.filter(function(i){
+    if(!ign.pl&&S.pl!=='all'&&i.plano!==S.pl) return false;
+    if(!ign.ex&&S.ex!=='all'&&i.eixo_cod!==S.ex) return false;
+    if(!ign.st&&S.st!=='all'&&i.aval.situacao!==S.st) return false;
+    if(S.or!=='all'&&i.o_ult!==S.or) return false;
+    if(S.lb!=='all'&&((i.lb_val!=null)?'1':'0')!==S.lb) return false;
+    if(S.rs!=='all'&&(i.ressalva?'1':'0')!==S.rs) return false;
+    if(S.rc!=='all'&&(i.recorte?'1':'0')!==S.rc) return false;
+    if(S.pm!=='all'&&((i.pol_s===1)?'1':'0')!==S.pm) return false;
+    if(b&&norm([i.nome,i.recorte,i.cod,i.plano,i.fonte_prev,i.fonte_ult,i.programa].join(' ')).indexOf(b)<0) return false;
+    return true;
+  });
+}
+function onFiltro(){render();}
+var PLREG={PRDA:'Amazônia Legal',PRDCO:'Centro-Oeste',PRDNE:'Nordeste'};
+function renderPlbar(){
+  var el=document.getElementById('plbar');
+  var itens=[['all','Visão integrada','3 planos · '+IND.length+' registros']].concat(PLORD.map(function(p){return [p,p,PLREG[p]+' · '+D.planos[p].sigla_sup];}));
+  el.innerHTML=itens.map(function(it){
+    var p=it[0], Lp=filt({pl:1}).filter(function(i){return p==='all'||i.plano===p;}), c=contaSit(Lp);
+    var cls=S.pl===p?' on':(S.pl!=='all'&&p!=='all'?' off':'');
+    return '<button class="plb'+cls+'" role="tab" aria-selected="'+(S.pl===p)+'" data-pl="'+p+'" style="--c:var('+(p==='all'?'--pr':PLC[p])+')">'
+      +'<div class="t">'+it[1]+'<small>'+Lp.length+' ind.</small></div><div class="s">'+it[2]+'</div>'
+      +'<div class="sbar">'+SIT.map(function(s){return c[s.k]?'<span style="flex:'+c[s.k]+';background:'+sitCor(s.k)+'" title="'+s.k+': '+c[s.k]+'"></span>':'';}).join('')+'</div></button>';
+  }).join('');
+  el.querySelectorAll('.plb').forEach(function(b){b.addEventListener('click',function(){S.pl=b.dataset.pl;render();});});
+  var r=document.documentElement.style;
+  if(S.pl==='all'){r.setProperty('--pc','var(--pr)');r.setProperty('--pcd','var(--pd)');}
+  else{r.setProperty('--pc','var('+PLC[S.pl]+')');r.setProperty('--pcd','color-mix(in srgb,var('+PLC[S.pl]+') 70%,#000)');}
+}
+function planosAtivos(){return PLORD.filter(function(p){return S.pl==='all'||S.pl===p;});}
+function plHead(p,extra){var pl=D.planos[p];return '<div class="plhead"><span class="sg">'+p+'</span><span class="nm">'+esc(pl.nome)+' · '+pl.sigla_sup+'</span><span class="ct">'+(extra||'')+'</span></div>';}
+function updCount(n){document.getElementById('sb-count').innerHTML='<b>'+n+'</b> de '+IND.length+' registros de indicador';}
+
+/* ============ NAVEGAÇÃO ============ */
+function buildNav(){
+  document.querySelectorAll('nav a').forEach(function(a){
+    function go(){irPara(a.dataset.view);}
+    a.addEventListener('click',go);
+    a.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}});
+  });
+}
+function irPara(v){
+  S.view=v;
+  document.querySelectorAll('nav a').forEach(function(x){x.classList.toggle('active',x.dataset.view===v);});
+  try{history.replaceState(null,'','#'+v);}catch(e){}
+  render();
+  window.scrollTo({top:0});
+}
+function abrirInd(id){S.ind=id;irPara('indicador');}
+function destroy(){Object.keys(charts).forEach(function(k){charts[k].destroy();});charts={};}
+function render(){
+  destroy();
+  var main=document.getElementById('main');
+  var v=S.view;
+  updCount(filt().length);
+  renderPlbar();
+  if(v==='principal')rPrincipal(main);
+  else if(v==='metas')rMetas(main);
+  else if(v==='indicador')rIndicador(main);
+  else if(v==='eixos')rEixos(main);
+  else if(v==='qualidade')rQualidade(main);
+  else if(v==='metodologia')rMetodologia(main);
+}
+
+/* ============ DOWNLOADS ============ */
+function btnDL(fnCSV,fnXLSX){
+  return '<div style="display:flex;gap:6px;flex-shrink:0">'
+    +'<button class="btn-dl" onclick="'+fnCSV+'">⬇ CSV</button>'
+    +(fnXLSX?'<button class="btn-dl" onclick="'+fnXLSX+'">⬇ XLSX</button>':'')+'</div>';
+}
+function downloadCSV(fn,rows){
+  var csv=rows.map(function(r){return r.map(function(c){
+    if(c==null) return '';var s=String(c);
+    if(/[;"\n]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';return s;}).join(';');}).join('\n');
+  var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=fn;a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+function downloadXLSX(fn,rows,sheet){
+  if(typeof XLSX==='undefined'){downloadCSV(fn.replace('.xlsx','.csv'),rows);return;}
+  var ws=XLSX.utils.aoa_to_sheet(rows);var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,(sheet||'Dados').substring(0,31));XLSX.writeFile(wb,fn);
+}
+function rowsMetas(){
+  var r=[['Plano','Eixo','Código','Indicador','Recorte','Unidade','Polaridade','Ano-base','Linha de base','Período mais recente','Valor mais recente','Origem do dado','Meta 2027','Unidade da meta','Tipo de meta','Situação','Progresso (%)','Comparabilidade','Fonte mais recente']];
+  filt().forEach(function(i){
+    r.push([i.plano,i.eixo,i.cod,i.nome,i.recorte,i.un,i.pol,i.lb_ano,i.lb_val,i.p_ult,i.v_ult,i.o_ult,
+      i.aval.modo==='relativa'?i.aval.meta_rel:i.aval.meta_ref,i.aval.modo==='relativa'?'variação % acumulada':i.un_meta,i.tipo_meta,
+      i.aval.situacao,i.aval.progresso!=null?Math.round(i.aval.progresso*1000)/10:null,i.cmp_ult,i.fonte_ult]);
+  });
+  return r;
+}
+function dlMetas(){downloadCSV('PRDs_painel_metas.csv',rowsMetas());}
+function dlMetasX(){downloadXLSX('PRDs_painel_metas.xlsx',rowsMetas(),'Painel de metas');}
+function rowsSerie(){
+  var i=IND.find(function(x){return x.id===S.ind;});if(!i) return [[]];
+  var r=[['Registro','Indicador','Período','Valor','Unidade','Origem','Status do cálculo','Comparabilidade','Fonte','URL da fonte','Observação']];
+  i.serie.forEach(function(s){r.push([i.id,nomeCurto(i),s.p,s.v,s.u,s.o,s.st,s.cmp,s.f,s.url,s.obs]);});
+  r.push([]);r.push(['Metas anuais']);r.push(['Ano','Meta','Unidade da meta']);
+  Object.keys(i.metas).forEach(function(a){r.push([a,i.metas[a].v!=null?i.metas[a].v:i.metas[a].t,i.un_meta]);});
+  return r;
+}
+function dlSerie(){downloadCSV(S.ind+'_serie.csv',rowsSerie());}
+function dlSerieX(){downloadXLSX(S.ind+'_serie.xlsx',rowsSerie(),'Série');}
+function rowsQual(){
+  var r=[['Achado','Plano','Escopo','Dimensão','Achado','Evidência','Severidade','Impacto','Tratamento na base','Ação recomendada']];
+  D.qualidade.forEach(function(q){r.push([q.achado_id,q.plano,q.escopo,q.dimensao,q.achado,q.evidencia,q.severidade,q.impacto,q.tratamento_na_base,q.acao_recomendada]);});
+  return r;
+}
+function dlQual(){downloadCSV('PRDs_qualidade.csv',rowsQual());}
+function dlQualX(){downloadXLSX('PRDs_qualidade.xlsx',rowsQual(),'Qualidade');}
+
+/* ============ AGREGAÇÕES ============ */
+function contaSit(lista){var c={};SIT.forEach(function(s){c[s.k]=0;});lista.forEach(function(i){c[i.aval.situacao]++;});return c;}
+function avaliados(c){return c['Meta alcançada']+c['Avançando']+c['Estável']+c['Em retrocesso']+c['Aquém da meta, sem linha de base'];}
+
+/* ============ PRINCIPAL ============ */
+function rPrincipal(main){
+  var L=filt(), c=contaSit(L);
+  function kpi(lbl,val,sub,st){
+    return '<div class="kc'+(st?' clk':'')+(st&&S.st===st?' active':'')+'"'+(st?' tabindex="0" onclick="toggleSit(\''+st+'\')" style="border-left-color:'+sitCor(st)+'"':'')+'>'
+      +'<div class="kl">'+lbl+'</div><div class="kv">'+val+'</div><div class="kd">'+sub+'</div></div>';
+  }
+  var aval=avaliados(c);
+  var um=S.pl!=='all', plx=um?D.planos[S.pl]:null, docx=um?D.fontes.find(function(f){return f.plano===S.pl;}):null;
+  var html='<div class="hero">'+(um
+      ?'<h2>'+S.pl+' · '+PLREG[S.pl]+'</h2><p>'+esc(plx.nome)+' · '+plx.sigla_sup+'. Linhas de base publicadas no plano e séries oficiais observadas até o período mais recente disponível.'+(docx?' <a class="doc" href="'+esc(docx.url_oficial)+'" target="_blank" rel="noopener">Documento do plano ↗</a>':'')+'</p>'
+      :'<h2>Indicadores dos Planos Regionais de Desenvolvimento</h2><p>Acompanhamento das metas do PRDA (Amazônia), do PRDCO (Centro-Oeste) e do PRDNE (Nordeste) para 2024–2027, com as linhas de base publicadas nos planos e as séries oficiais observadas até o período mais recente disponível. Escolha um plano na barra acima para ver apenas os seus indicadores.</p>')
+    +'<div class="hero-search"><input type="text" id="hero-busca" placeholder="Busque um indicador (ex.: IDEB, desmatamento, VAB)..." aria-label="Buscar indicador"></div>'
+    +'<div class="hero-res" id="hero-res" hidden></div></div>'
+    +'<div class="kg4">'
+    +kpi('Registros no filtro',L.length,aval+' com avaliação frente à meta')
+    +kpi('Meta alcançada',c['Meta alcançada'],aval?fmtPct(c['Meta alcançada']/aval)+' dos avaliados':'—','Meta alcançada')
+    +kpi('Avançando',c['Avançando'],aval?fmtPct(c['Avançando']/aval)+' dos avaliados':'—','Avançando')
+    +kpi('Em retrocesso',c['Em retrocesso'],aval?fmtPct(c['Em retrocesso']/aval)+' dos avaliados':'—','Em retrocesso')
+    +'</div>';
+  // cards por plano (só na visão integrada)
+  if(!um){
+  html+='<div class="g3" style="margin-bottom:12px">';
+  PLORD.forEach(function(p){
+    var pl=D.planos[p], Lp=filt({pl:1}).filter(function(i){return i.plano===p;}), cp=contaSit(Lp), n=Lp.length;
+    var doc=D.fontes.find(function(f){return f.plano===p;});
+    html+='<div class="pc clk" onclick="S.pl=\''+p+'\';render()" title="Ver só o '+p+'" style="--c:var('+PLC[p]+')"><div class="sg">'+p+' <span style="font-size:12px;color:var(--soft);font-weight:500">· '+pl.sigla_sup+'</span></div>'
+      +'<div class="nm">'+esc(pl.nome)+'</div>'
+      +'<div class="sbar" role="img" aria-label="Distribuição por situação">'+SIT.map(function(s){return cp[s.k]?'<span style="flex:'+cp[s.k]+';background:'+sitCor(s.k)+'" title="'+s.k+': '+cp[s.k]+'"></span>':'';}).join('')+'</div>'
+      +'<div class="row"><span>Registros de indicador</span><b>'+n+'</b></div>'
+      +SIT.map(function(s){return cp[s.k]?'<div class="row"><span><span class="ld" style="display:inline-block;background:'+sitCor(s.k)+';margin-right:6px"></span>'+s.k+'</span><b>'+cp[s.k]+'</b></div>':'';}).join('')
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap">'
+      +'<a href="#" onclick="event.stopPropagation();S.pl=\''+p+'\';irPara(\'metas\');return false;">Ver metas do '+p+' →</a>'
+      +(doc?'<a href="'+esc(doc.url_oficial)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">Documento do plano ↗</a>':'')+'</div></div>';
+  });
+  html+='</div>';
+  }
+  var rotulos, grupos;
+  if(um){
+    grupos=EIXOS.filter(function(e){return L.some(function(i){return i.eixo_cod===e[0];});});
+    rotulos=grupos.map(function(e){if(e[0]==='M') return 'Macroindicadores';var g=L.find(function(i){return i.eixo_cod===e[0];});return e[0]+'. '+(g.eixo_plano||e[1]);});
+  }else{grupos=PLORD.slice();rotulos=grupos;}
+  html+='<div class="card"'+(um?' style="border-top:5px solid var('+PLC[S.pl]+')"':'')+'><h2>Situação frente à meta, '+(um?'por eixo do '+S.pl:'por plano')+'</h2><div class="desc">Número de registros de indicador em cada situação, respeitando os filtros da barra lateral. Clique em uma barra para abrir o Painel de Metas filtrado.</div><div style="height:'+(um?50+grupos.length*36:210)+'px;position:relative"><canvas id="ch-sit"></canvas></div><div class="leg" id="leg-sit"></div></div>';
+  html+='<div class="g3">'
+    +'<div class="mini-card" tabindex="0" onclick="irPara(\'metas\')"><div class="ic">Tabela</div><b>Painel de Metas</b><p>Todos os indicadores com linha de base, valor mais recente, meta 2027 e progresso.</p></div>'
+    +'<div class="mini-card" tabindex="0" onclick="irPara(\'indicador\')"><div class="ic">Série histórica</div><b>Evolução do Indicador</b><p>Série observada, metas anuais, ficha técnica e fontes de cada indicador.</p></div>'
+    +'<div class="mini-card" tabindex="0" onclick="irPara(\'eixos\')"><div class="ic">Comparação</div><b>Por Eixo</b><p>Distribuição das situações e do progresso pelos eixos comuns aos três planos.</p></div>'
+    +'</div>';
+  main.innerHTML=html;
+  // busca hero
+  var bi=document.getElementById('hero-busca'),br=document.getElementById('hero-res');
+  bi.addEventListener('input',function(){
+    var t=norm(bi.value.trim());if(!t){br.hidden=true;return;}
+    var res=IND.filter(function(i){return (!um||i.plano===S.pl)&&norm(i.nome+' '+(i.recorte||'')+' '+i.cod+' '+i.plano).indexOf(t)>=0;}).slice(0,14);
+    br.innerHTML=res.length?res.map(function(i){return '<div data-id="'+i.id+'">'+plBadge(i.plano)+' '+esc(i.cod)+' · '+esc(nomeCurto(i))+'</div>';}).join(''):'<div style="color:var(--soft);cursor:default">Nenhum indicador encontrado</div>';
+    br.hidden=false;
+    br.querySelectorAll('div[data-id]').forEach(function(d){d.addEventListener('click',function(){abrirInd(d.dataset.id);});});
+  });
+  // gráfico
+  var ds=SIT.map(function(s){
+    return {label:s.k,data:grupos.map(function(g){return L.filter(function(i){return (um?i.eixo_cod===g[0]:i.plano===g)&&i.aval.situacao===s.k;}).length;}),
+      backgroundColor:sitCor(s.k),borderColor:'#fff',borderWidth:{right:2},borderSkipped:false,barThickness:um?22:26};
+  });
+  charts.sit=new Chart(document.getElementById('ch-sit'),{type:'bar',data:{labels:rotulos,datasets:ds},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+c.raw;}}}},
+      scales:{x:{stacked:true,grid:{color:'#e8eaed'},ticks:{precision:0,font:{size:10}},title:{display:true,text:'registros de indicador',font:{size:10}}},y:{stacked:true,grid:{display:false},ticks:{font:um?{size:11}:{size:12,weight:'700'}}}},
+      onClick:function(e,els){if(els.length){var el=els[0];if(um) setFiltro('ex',grupos[el.index][0]); else S.pl=grupos[el.index];setFiltro('st',SIT[el.datasetIndex].k);irPara('metas');}}}});
+  legSit('leg-sit');
+}
+function legSit(id){document.getElementById(id).innerHTML=SIT.map(function(s){return '<span class="li" title="'+esc(s.d)+'"><span class="ld" style="background:'+sitCor(s.k)+'"></span>'+s.k+'</span>';}).join('');}
+function toggleSit(k){setFiltro('st',S.st===k?'all':k);render();}
+
+/* ============ PAINEL DE METAS ============ */
+function rMetas(main){
+  var L=filt().slice().sort(function(a,b){return (a.eixo_cod==='M'?-1:0)-(b.eixo_cod==='M'?-1:0)||a.cod.localeCompare(b.cod,undefined,{numeric:true})||(a.recorte||'').localeCompare(b.recorte||'');});
+  var html='<div class="tb-top"><div class="tb"><h1>Painel de Metas</h1><div class="sub">Linha de base, valor mais recente e meta de cada indicador · clique em uma linha para ver a série completa</div></div>'+btnDL('dlMetas()','dlMetasX()')+'</div>';
+  if(!L.length){main.innerHTML=html+'<div class="card vazio">Nenhum indicador atende aos filtros selecionados.</div>';return;}
+  planosAtivos().forEach(function(p){
+    var Lp=L.filter(function(i){return i.plano===p;});
+    var c=contaSit(Lp);
+    html+='<section class="plsec" style="--c:var('+PLC[p]+')">'+plHead(p,Lp.length+' registro(s) · '+c['Meta alcançada']+' com meta alcançada')+'<div class="body flush">';
+    if(!Lp.length){html+='<div class="vazio">Nenhum indicador deste plano atende aos filtros.</div></div></section>';return;}
+    html+='<div class="tw"><table><thead><tr><th>Código</th><th>Indicador</th><th class="num">Linha de base</th><th class="num">Mais recente</th><th class="num">Meta</th><th>Situação e progresso</th></tr></thead><tbody>';
+    var eixoAnt='';
+    Lp.forEach(function(i){
+      if(i.eixo_cod!==eixoAnt){eixoAnt=i.eixo_cod;html+='<tr class="ex-row"><td colspan="6">'+(i.eixo_cod==='M'?'':'Eixo '+i.eixo_cod+' — ')+esc(i.eixo_plano||i.eixo)+'</td></tr>';}
+      var aviso=i.ressalva?' <span class="warn" title="'+esc(i.cmp_ult)+'">⚠</span>':'';
+      html+='<tr class="clk" tabindex="0" data-id="'+i.id+'"><td style="white-space:nowrap;font-weight:700;color:var(--c)">'+esc(i.cod)+'</td>'
+        +'<td style="min-width:240px">'+esc(i.nome)+(i.recorte?' <b>— '+esc(i.recorte)+'</b>':'')+'<div style="font-size:10px;color:var(--soft);margin-top:2px">'+esc(i.un)+' · '+esc(i.pol)+'</div></td>'
+        +'<td class="num">'+baseTxt(i)+'</td>'
+        +'<td class="num">'+fmtU(i.v_ult,i.un)+'<div style="font-size:10px;color:var(--soft)">'+esc(i.p_ult)+aviso+'</div></td>'
+        +'<td class="num">'+metaTxt(i)+'</td>'
+        +'<td style="min-width:150px">'+sitBadge(i.aval.situacao)+'<div style="margin-top:5px">'+progHTML(i)+'</div></td></tr>';
+    });
+    html+='</tbody></table></div></div></section>';
+  });
+  html+='<div class="card"><div class="desc" style="margin:0">* Para o PRDA, o plano informa apenas o ano-base e metas de variação relativa; o valor marcado com asterisco é o observado na série no ano-base e o progresso compara a variação acumulada com a meta quadrienal. ⚠ indica observação mais recente com proxy ou ressalva de comparabilidade. Os critérios de classificação estão na aba Metodologia.</div><div class="leg" id="leg-m"></div></div>';
+  main.innerHTML=html;legSit('leg-m');
+  main.querySelectorAll('tr.clk').forEach(function(tr){
+    tr.addEventListener('click',function(){abrirInd(tr.dataset.id);});
+    tr.addEventListener('keydown',function(e){if(e.key==='Enter')abrirInd(tr.dataset.id);});
+  });
+}
+
+/* ============ EVOLUÇÃO DO INDICADOR ============ */
+function rIndicador(main){
+  var L=filt();
+  if(!L.length){main.innerHTML='<div class="tb"><h1>Evolução do Indicador</h1></div><div class="card vazio">Nenhum indicador atende aos filtros selecionados.</div>';return;}
+  if(!S.ind||!L.some(function(i){return i.id===S.ind;})) S.ind=L[0].id;
+  var i=IND.find(function(x){return x.id===S.ind;});
+  var pSel=i.plano;
+  // abas de plano dentro do seletor (quando a visão é integrada)
+  var sel='<div class="ind-panel" style="border-top:5px solid var('+PLC[pSel]+')"><div class="ind-panel-title" style="color:var('+PLC[pSel]+')">Selecione o indicador</div>';
+  if(S.pl==='all'){
+    sel+='<div class="subtabs">'+PLORD.map(function(p){var n=L.filter(function(x){return x.plano===p;}).length;
+      return '<button class="subtab'+(p===pSel?' on':'')+'" data-pl="'+p+'" style="--c:var('+PLC[p]+')"'+(n?'':' disabled')+'>'+p+' · '+n+'</button>';}).join('')+'</div>';
+  }
+  var Lp=L.filter(function(x){return x.plano===pSel;});
+  EIXOS.forEach(function(e){
+    var g=Lp.filter(function(x){return x.eixo_cod===e[0];});if(!g.length) return;
+    g.sort(function(a,b){return a.cod.localeCompare(b.cod,undefined,{numeric:true})||(a.recorte||'').localeCompare(b.recorte||'');});
+    sel+='<div class="ind-grupo-row"><div class="ind-grupo-label" style="color:var('+PLC[pSel]+');background:color-mix(in srgb,var('+PLC[pSel]+') 8%,#fff)">'+(e[0]==='M'?'Macroindicadores':'Eixo '+e[0]+' — '+esc(g[0].eixo_plano||e[1]))+'</div><div class="ind-grupo-tags">'
+      +g.map(function(x){
+        var lab=x.cod.replace(/-I$/,'').replace('MACRO-','Macro ')+(x.recorte?' · '+x.recorte.replace('Bioma ',''):'');
+        return '<button class="itag'+(x.id===S.ind?' active':'')+'" data-id="'+x.id+'" title="'+esc(nomeCurto(x)+' ('+x.aval.situacao+')')+'"'+(x.id===S.ind?' style="background:var('+PLC[pSel]+');border-color:var('+PLC[pSel]+')"':'')+'><span class="dot" style="background:'+sitCor(x.aval.situacao)+'"></span>'+esc(lab)+'</button>';
+      }).join('')+'</div></div>';
+  });
+  sel+='<div class="leg" id="leg-i" style="margin-top:4px"></div></div>';
+
+  var a=i.aval, pl=D.planos[i.plano];
+  var info='<div class="ind-info" style="background:var('+PLC[i.plano]+')"><div class="nm">'+esc(i.cod)+' · '+esc(nomeCurto(i))+'</div>'
+    +'<div class="mt">'+i.plano+' ('+pl.sigla_sup+') · '+(i.eixo_cod==='M'?'Macroindicador':'Eixo '+i.eixo_cod+' — '+esc(i.eixo_plano))+(i.programa?' · Programa '+esc(i.prog_cod)+' — '+esc(i.programa):'')+'</div></div>';
+
+  // KPIs
+  var ult=i.serie[i.serie.length-1]||{};
+  var k='<div class="kg4">';
+  k+='<div class="kc"><div class="kl">Linha de base do plano</div><div class="kv">'+(i.lb_val!=null?fmtU(i.lb_val,i.un):'—')+'</div><div class="kd">'+(i.lb_ano?'Ano-base '+i.lb_ano:'Ano-base não informado')+' · '+esc(i.lb_status)+(a.base_calc?'<br>Valor observado em '+esc(a.base_calc.p)+': <b>'+fmtU(a.base_calc.v,i.un)+'</b>':'')+'</div></div>';
+  var dvar='';
+  if(a.modo==='relativa'&&a.var_rel!=null){
+    dvar='<div class="kd '+(i.pol_s*a.var_rel>0?'p':'n')+'">'+(a.var_rel>=0?'▲ ':'▼ ')+sinal(a.var_rel,1)+(a.unid_rel==='p.p.'?' p.p.':'%')+' desde '+a.base_calc.p+'</div>';
+  }else if(i.var_base!=null&&i.lb_val!=null){
+    dvar='<div class="kd '+(i.direcao==='Alinhada'?'p':i.direcao==='Não alinhada'?'n':'')+'">'+(i.var_base>=0?'▲ ':'▼ ')+sinal(i.var_base,casas(i.var_base,i.un))+' desde a base</div>';
+  }else dvar='<div class="kd">Período '+esc(i.p_ult)+'</div>';
+  k+='<div class="kc" style="border-left-color:'+sitCor(a.situacao)+'"><div class="kl">Mais recente ('+esc(i.p_ult)+')</div><div class="kv">'+fmtU(i.v_ult,i.un)+'</div>'+dvar+'</div>';
+  k+='<div class="kc"><div class="kl">Meta '+(a.ano_meta===2030?'2030':'2027')+'</div><div class="kv">'+metaTxt(i)+'</div><div class="kd">'+(a.modo==='relativa'?'Variação relativa sobre '+i.lb_ano:(i.dif_meta!=null&&a.situacao!=='Sem avaliação'?'Diferença atual: '+sinal(i.dif_meta,casas(i.dif_meta,i.un)):'Unidade da meta: '+esc(i.un_meta)))+'</div></div>';
+  k+='<div class="kc" style="border-left-color:'+sitCor(a.situacao)+'"><div class="kl">Situação</div><div style="margin:3px 0 4px">'+sitBadge(a.situacao)+'</div>'+progHTML(i)+'</div>';
+  k+='</div>';
+
+  var html='<div class="tb-top"><div class="tb"><h1>Evolução do Indicador</h1><div class="sub">Série observada, linha de base e metas anuais do plano</div></div>'+btnDL('dlSerie()','dlSerieX()')+'</div>'+sel+info+k;
+
+  var temMetaNivel=a.modo==='nivel'&&Object.keys(i.metas).some(function(y){return i.metas[y].v!=null;})&&a.situacao!=='Sem avaliação'||(a.modo==='nivel'&&a.ano_meta===2030);
+  html+='<div class="'+(a.modo==='relativa'?'g2':'')+'">';
+  html+='<div class="card"><h2>Série observada'+(temMetaNivel?' e metas anuais':'')+'</h2><div class="desc">'+esc(i.un)+' · '+esc(i.pol)+(i.pol_inferida?' (inferida da redação "Atingir")':'')+'. Losango escuro = linha de base publicada no plano; círculo vazado = proxy ou estimativa.</div><div class="cw"><canvas id="ch-serie"></canvas></div></div>';
+  if(a.modo==='relativa') html+='<div class="card"><h2>Metas anuais de variação (%)</h2><div class="desc">O PRDA expressa as metas como variação anual. As barras na cor do plano mostram a variação observada entre anos consecutivos da série, quando disponível.</div><div class="cw"><canvas id="ch-var"></canvas></div></div>';
+  html+='</div>';
+
+  // avaliação
+  var notas='';
+  if(a.motivo) notas+='<div class="nota info"><b>Como a situação foi definida.</b> '+esc(a.motivo)+'</div>';
+  if(i.limitacao) notas+='<div class="nota"><b>Limitação da série.</b> '+esc(i.limitacao)+'</div>';
+  if(i.obs_q) notas+='<div class="nota"><b>Observação de qualidade.</b> '+esc(i.obs_q)+'</div>';
+
+  // ficha
+  var doc=i.url_doc?'<a href="'+esc(i.url_doc)+(i.pag?'#page='+i.pag:'')+'" target="_blank" rel="noopener">'+esc(i.plano)+' 2024–2027'+(i.pag?', p. '+i.pag+' do PDF':'')+' ↗</a>':'—';
+  var fic=[['Objetivo do programa',i.objetivo],['Meta no texto do plano',i.meta_txt],['Fonte prevista no plano',i.fonte_prev],['Periodicidade',i.periodicidade],['Tipo de meta',i.tipo_meta],['Unidade da meta',i.un_meta],['Ações estratégicas associadas',(i.n_acoes!=null?i.n_acoes+': ':'')+(i.acoes||'')],['Código no documento',i.cod_fonte],['Documento-fonte',null,doc]];
+  html+='<div class="g2"><div class="card"><h2>Ficha do indicador</h2><div class="fic" style="margin-top:8px">'+fic.map(function(f){return '<div>'+f[0]+'</div><div>'+(f[2]||esc(f[1])||'—')+'</div>';}).join('')+'</div></div>';
+  html+='<div class="card"><h2>Leitura da avaliação</h2>'+(notas||'<div class="desc">Série comparável ao indicador do plano, sem limitações registradas.</div>')
+    +'<div class="nota info" style="border-left-color:'+sitCor(a.situacao)+'"><b>Fonte mais recente.</b> '+(i.url_ult?'<a href="'+esc(i.url_ult)+'" target="_blank" rel="noopener">'+esc(i.fonte_ult)+' ↗</a>':esc(i.fonte_ult))+'<br><b>Comparabilidade.</b> '+esc(i.cmp_ult)+'</div></div></div>';
+
+  // tabela da série
+  html+='<div class="card" style="padding:12px 0 4px"><h2 style="padding:0 16px">Observações</h2><div class="desc" style="padding:0 16px">Cada linha é uma observação da série. Passe o cursor sobre a comparabilidade para ver a observação completa.</div><div class="tw"><table><thead><tr><th>Período</th><th class="num">Valor</th><th>Origem</th><th>Comparabilidade</th><th>Fonte</th></tr></thead><tbody>'
+    +i.serie.map(function(s){return '<tr><td>'+esc(s.p)+'</td><td class="num">'+fmtU(s.v,s.u)+'</td><td>'+esc(s.o)+'<div style="font-size:10px;color:var(--soft)">'+esc(s.st)+'</div></td><td title="'+esc(s.obs||s.met||'')+'">'+esc(s.cmp)+'</td><td style="min-width:180px">'+(s.url?'<a href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(s.f)+'</a>':esc(s.f))+'</td></tr>';}).join('')
+    +'</tbody></table></div></div>';
+
+  main.innerHTML=html;
+  document.getElementById('leg-i').innerHTML=SIT.map(function(s){return '<span class="li"><span class="ld" style="border-radius:50%;background:'+sitCor(s.k)+'"></span>'+s.k+'</span>';}).join('');
+  main.querySelectorAll('.itag').forEach(function(t){t.addEventListener('click',function(){S.ind=t.dataset.id;render();});});
+  main.querySelectorAll('.subtab').forEach(function(t){t.addEventListener('click',function(){var f=L.filter(function(x){return x.plano===t.dataset.pl;});if(f.length){S.ind=f[0].id;render();}});});
+  chartSerie(i,temMetaNivel);
+  if(a.modo==='relativa') chartVar(i);
+}
+function chartSerie(i,comMetas){
+  var pts=i.serie.map(function(s){return {lab:s.p,k:s.k,v:s.v,o:s.o};});
+  var labs=pts.map(function(p){return {lab:p.lab,k:p.k};});
+  var metas={};
+  if(comMetas){
+    Object.keys(i.metas).forEach(function(y){var m=i.metas[y];if(m.v!=null){metas[y]=m.v;}});
+    if(i.aval.ano_meta===2030&&i.aval.meta_ref!=null) metas['2030']=i.aval.meta_ref;
+    Object.keys(metas).forEach(function(y){if(!labs.some(function(l){return l.lab===y;})) labs.push({lab:y,k:+y+0.5});});
+  }
+  labs.sort(function(a,b){return a.k-b.k;});
+  var L=labs.map(function(l){return l.lab;});
+  var obs=L.map(function(l){var p=pts.find(function(x){return x.lab===l;});return p?p.v:null;});
+  var pr=cv('--pr'), ok=cv('--s-ok'), c=cv(PLC[i.plano]);
+  var styles=L.map(function(l){var p=pts.find(function(x){return x.lab===l;});return p&&p.o==='Linha de base do plano'?'rectRot':'circle';});
+  var fill=L.map(function(l){var p=pts.find(function(x){return x.lab===l;});if(!p) return c;if(p.o==='Linha de base do plano') return '#232323';if(p.o==='Proxy / estimativa') return '#fff';return c;});
+  var brd=L.map(function(l){var p=pts.find(function(x){return x.lab===l;});return p&&p.o==='Linha de base do plano'?'#232323':c;});
+  var ds=[{label:'Observado',data:obs,borderColor:c,backgroundColor:fill,pointBackgroundColor:fill,pointBorderColor:brd,pointBorderWidth:2,pointStyle:styles,pointRadius:L.map(function(l,ix){return obs[ix]==null?0:5;}),pointHoverRadius:7,borderWidth:2,tension:0.2,spanGaps:true}];
+  if(comMetas&&Object.keys(metas).length){
+    ds.push({label:'Meta do plano',data:L.map(function(l){return metas[l]!=null?metas[l]:null;}),borderColor:ok,backgroundColor:ok,borderDash:[5,4],borderWidth:2,pointRadius:5,pointStyle:'triangle',spanGaps:true});
+  }
+  charts.serie=new Chart(document.getElementById('ch-serie'),{type:'line',data:{labels:L,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,usePointStyle:true}},
+        tooltip:{callbacks:{label:function(ctx){if(ctx.raw==null) return null;var p=pts.find(function(x){return x.lab===ctx.label;});
+          return ' '+ctx.dataset.label+': '+fmtU(ctx.raw,i.un)+(ctx.datasetIndex===0&&p?' ('+p.o+')':'');}}}},
+      scales:{x:{grid:{display:false},ticks:{font:{size:10},maxRotation:0,autoSkip:true}},
+        y:{grid:{color:'#e8eaed'},ticks:{font:{size:10},callback:function(v){return fmt(v,i.un);}},title:{display:true,text:i.un,font:{size:10}}}}}});
+}
+function chartVar(i){
+  var anual=i.serie.filter(function(s){return /^\d{4}$/.test(s.p);});
+  var byA={};anual.forEach(function(s){byA[s.a]=s.v;});
+  var pp=i.un_meta==='pontos percentuais';
+  var anos=Object.keys(i.metas).filter(function(y){return +y<=2027;});
+  var obsA=anos.map(function(y){var a=+y;if(byA[a]!=null&&byA[a-1]!=null){return pp?byA[a]-byA[a-1]:(byA[a]/byA[a-1]-1)*100;}return null;});
+  var c=cv(PLC[i.plano]);
+  charts.var=new Chart(document.getElementById('ch-var'),{type:'bar',data:{labels:anos,datasets:[
+    {label:'Meta anual',data:anos.map(function(y){return i.metas[y].v;}),backgroundColor:cv('--s-ok')+'99',borderColor:cv('--s-ok'),borderWidth:1.5,borderRadius:4,maxBarThickness:34},
+    {label:'Variação observada',data:obsA,backgroundColor:c,borderRadius:4,maxBarThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:function(ctx){return ctx.raw==null?' '+ctx.dataset.label+': sem dado':' '+ctx.dataset.label+': '+sinal(ctx.raw,2)+(pp?' p.p.':'%');}}}},
+      scales:{x:{grid:{display:false}},y:{grid:{color:'#e8eaed'},ticks:{font:{size:10},callback:function(v){return v+(pp?' p.p.':'%');}}}}}});
+}
+
+/* ============ POR EIXO ============ */
+function rEixos(main){
+  var L=filt();
+  var html='<div class="tb-top"><div class="tb"><h1>Situação por Eixo</h1><div class="sub">Cada plano em seu próprio bloco · eixos numerados de 1 a 7 nos três planos</div></div>'+btnDL('dlMetas()','dlMetasX()')+'</div>';
+  if(!L.length){main.innerHTML=html+'<div class="card vazio">Nenhum indicador atende aos filtros selecionados.</div>';return;}
+  var PL=planosAtivos(), cfg=[];
+  // tabela-resumo comparativa (única visão lado a lado)
+  var exAll=EIXOS.filter(function(e){return L.some(function(i){return i.eixo_cod===e[0];});});
+  if(PL.length>1){
+    html+='<div class="card" style="padding:12px 0 4px"><h2 style="padding:0 16px">Resumo comparativo: metas alcançadas ou em avanço</h2><div class="desc" style="padding:0 16px">Indicadores com meta alcançada ou avançando sobre o total avaliado, por eixo. Ponto (·) indica que o plano não tem indicador no eixo.</div><div class="tw"><table><thead><tr><th>Eixo</th>'+PL.map(function(p){return '<th class="num" style="color:var('+PLC[p]+');border-bottom:3px solid var('+PLC[p]+')">'+p+'</th>';}).join('')+'</tr></thead><tbody>';
+    exAll.forEach(function(e){
+      html+='<tr><td><b>'+(e[0]==='M'?'':e[0]+'. ')+e[1]+'</b></td>';
+      PL.forEach(function(p){
+        var g=L.filter(function(i){return i.eixo_cod===e[0]&&i.plano===p;});
+        if(!g.length){html+='<td class="num" style="color:#bbb">·</td>';return;}
+        var c=contaSit(g), av=avaliados(c), bom=c['Meta alcançada']+c['Avançando'];
+        html+='<td class="num">'+(av?'<b>'+bom+'</b>/'+av+' <span style="color:var(--soft);font-size:10px">('+fmtPct(bom/av)+')</span>':'<span style="color:var(--soft)">sem avaliação</span>')+'</td>';
+      });
+      html+='</tr>';
+    });
+    html+='</tbody></table></div></div>';
+  }
+  PL.forEach(function(p){
+    var Lp=L.filter(function(i){return i.plano===p;});
+    var ex=EIXOS.filter(function(e){return Lp.some(function(i){return i.eixo_cod===e[0];});});
+    var P=Lp.filter(function(i){return i.aval.progresso!=null;}).sort(function(a,b){return b.aval.progresso-a.aval.progresso;});
+    html+='<section class="plsec" style="--c:var('+PLC[p]+')">'+plHead(p,Lp.length+' registro(s) · '+P.length+' com progresso mensurável')+'<div class="body">';
+    if(!Lp.length){html+='<div class="vazio">Nenhum indicador deste plano atende aos filtros.</div></div></section>';return;}
+    html+='<div class="g2"><div style="min-width:0"><h2 style="font-size:13px;margin:0 0 2px">Registros por situação em cada eixo</h2><div class="desc">Clique em uma barra para listar os indicadores.</div><div style="height:'+(50+ex.length*34)+'px;position:relative"><canvas id="ch-ex-'+p+'"></canvas></div></div>'
+      +'<div style="min-width:0"><h2 style="font-size:13px;margin:0 0 2px">Progresso rumo à meta</h2><div class="desc">100% = meta alcançada; negativo = afastamento. Eixo limitado a −100% e 200%.</div>'
+      +(P.length?'<div style="height:'+(40+P.length*19)+'px;position:relative"><canvas id="ch-pg-'+p+'"></canvas></div>':'<div class="vazio">Sem indicadores com linha de base e meta comparáveis.</div>')+'</div></div>';
+    html+='</div></section>';
+    cfg.push({p:p,Lp:Lp,ex:ex,P:P});
+  });
+  html+='<div class="card"><div class="leg" id="leg-ex" style="margin:0"></div></div>';
+  main.innerHTML=html;legSit('leg-ex');
+  cfg.forEach(function(o){
+    var ds=SIT.map(function(s){return {label:s.k,data:o.ex.map(function(e){return o.Lp.filter(function(i){return i.eixo_cod===e[0]&&i.aval.situacao===s.k;}).length;}),backgroundColor:sitCor(s.k),borderColor:'#fff',borderWidth:{right:2},borderSkipped:false,maxBarThickness:22};});
+    charts['ex'+o.p]=new Chart(document.getElementById('ch-ex-'+o.p),{type:'bar',data:{labels:o.ex.map(function(e){if(e[0]==='M') return 'Macroindicadores';var g=o.Lp.find(function(i){return i.eixo_cod===e[0];});return e[0]+'. '+((g&&g.eixo_plano)||e[1]);}),datasets:ds},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{stacked:true,ticks:{precision:0,font:{size:10}},grid:{color:'#e8eaed'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10.5},callback:function(v){var t=this.getLabelForValue(v);return t.length>34?t.slice(0,33)+'…':t;}}}},
+        onClick:function(e,els){if(els.length){S.pl=o.p;setFiltro('ex',o.ex[els[0].index][0]);setFiltro('st',SIT[els[0].datasetIndex].k);irPara('metas');}}}});
+    if(o.P.length){
+      charts['pg'+o.p]=new Chart(document.getElementById('ch-pg-'+o.p),{type:'bar',data:{labels:o.P.map(function(i){return i.cod.replace(/-I$/,'')+(i.recorte?' '+i.recorte.replace('Bioma ',''):'');}),
+        datasets:[{label:'Progresso',data:o.P.map(function(i){return Math.max(-100,Math.min(200,i.aval.progresso*100));}),backgroundColor:o.P.map(function(i){return sitCor(i.aval.situacao);}),borderRadius:3,barThickness:11}]},
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{title:function(c){return nomeCurto(o.P[c[0].dataIndex]);},label:function(c){var i=o.P[c.dataIndex];return ' '+fmtPct(i.aval.progresso)+' · '+i.aval.situacao;}}}},
+          scales:{x:{min:-100,max:200,grid:{color:function(c){return c.tick.value===100||c.tick.value===0?'#9aa':'#eceff3';}},ticks:{font:{size:10},callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{font:{size:10},autoSkip:false}}},
+          onClick:function(e,els){if(els.length) abrirInd(o.P[els[0].index].id);}}});
+    }
+  });
+}
+
+/* ============ QUALIDADE ============ */
+function rQualidade(main){
+  var L=filt();
+  var html='<div class="tb-top"><div class="tb"><h1>Qualidade dos Dados</h1><div class="sub">Completude das linhas de base, origem das séries e ressalvas registradas nos documentos-fonte</div></div>'+btnDL('dlQual()','dlQualX()')+'</div>';
+  html+='<div class="kg4">';
+  PLORD.forEach(function(p){
+    var g=IND.filter(function(i){return i.plano===p;}), cv2=g.filter(function(i){return i.lb_val!=null;}).length;
+    html+='<div class="kc" style="border-left-color:var('+PLC[p]+')"><div class="kl">'+p+' · linha de base com valor</div><div class="kv">'+cv2+' <small>de '+g.length+'</small></div><div class="kd">'+fmtPct(cv2/g.length)+' dos registros</div></div>';
+  });
+  var nres=IND.filter(function(i){return i.ressalva;}).length;
+  html+='<div class="kc" style="border-left-color:var(--am)"><div class="kl">Com ressalva na observação mais recente</div><div class="kv">'+nres+' <small>de '+IND.length+'</small></div><div class="kd">Proxy, mudança de fonte ou revisão</div></div></div>';
+  html+='<div class="g2"><div class="card"><h2>Origem do dado mais recente</h2><div class="desc">Registros filtrados, por plano. Proxies são séries substitutas quando não há continuação oficial do indicador.</div><div class="cw2"><canvas id="ch-or"></canvas></div></div>'
+    +'<div class="card"><h2>Defasagem das séries</h2><div class="desc">Ano da observação mais recente dos registros filtrados.</div><div class="cw2"><canvas id="ch-df"></canvas></div></div></div>';
+  var sev={'Alta':'#f8d7da;color:#721c24','Média':'#fff3cd;color:#856404','Baixa':'#e3edf9;color:#0d3e8a'};
+  var Q=D.qualidade.filter(function(q){return S.pl==='all'||q.plano===S.pl;});
+  html+='<div class="card" style="padding:12px 0 4px"><h2 style="padding:0 16px">Ressalvas registradas nos documentos-fonte</h2><div class="desc" style="padding:0 16px">'+Q.length+' achados. Nenhum valor ausente foi imputado na base.</div><div class="tw"><table><thead><tr><th>ID</th><th>Plano</th><th>Escopo</th><th>Achado</th><th>Severidade</th><th>Tratamento na base</th><th>Ação recomendada</th></tr></thead><tbody>'
+    +Q.map(function(q){return '<tr><td>'+q.achado_id+'</td><td>'+plBadge(q.plano)+'</td><td>'+esc(q.escopo)+'<div style="font-size:10px;color:var(--soft)">'+esc(q.dimensao)+'</div></td><td style="min-width:220px">'+esc(q.achado)+'<div style="font-size:10.5px;color:var(--soft);margin-top:2px">'+esc(q.evidencia)+'</div></td><td><span class="bn" style="background:'+(sev[q.severidade]||'#eee')+'">'+esc(q.severidade)+'</span></td><td style="min-width:180px">'+esc(q.tratamento_na_base)+'</td><td style="min-width:180px">'+esc(q.acao_recomendada)+'</td></tr>';}).join('')
+    +'</tbody></table></div></div>';
+  main.innerHTML=html;
+  var ORG=[['Publicado pela fonte','#1565c0'],['Calculado','#64b5f6'],['Proxy / estimativa','#e0a100']];
+  var planos=PLORD.filter(function(p){return S.pl==='all'||S.pl===p;});
+  charts.or=new Chart(document.getElementById('ch-or'),{type:'bar',data:{labels:planos,datasets:ORG.map(function(o){return {label:o[0],data:planos.map(function(p){return L.filter(function(i){return i.plano===p&&i.o_ult===o[0];}).length;}),backgroundColor:o[1],borderColor:'#fff',borderWidth:{right:2},borderSkipped:false,barThickness:24};})},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}}},scales:{x:{stacked:true,ticks:{precision:0}},y:{stacked:true,grid:{display:false},ticks:{font:{weight:'700'}}}}}});
+  var anos=[];L.forEach(function(i){if(anos.indexOf(i.a_ult)<0) anos.push(i.a_ult);});anos.sort();
+  charts.df=new Chart(document.getElementById('ch-df'),{type:'bar',data:{labels:anos.map(String),datasets:planos.map(function(p){return {label:p,data:anos.map(function(a){return L.filter(function(i){return i.plano===p&&i.a_ult===a;}).length;}),backgroundColor:plCor(p),borderColor:'#fff',borderWidth:{top:2},borderSkipped:false,maxBarThickness:40,borderRadius:0};})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{precision:0},grid:{color:'#e8eaed'},title:{display:true,text:'registros',font:{size:10}}}}}});
+}
+
+/* ============ METODOLOGIA ============ */
+function rMetodologia(main){
+  var html='<div class="tb"><h1>Metodologia</h1><div class="sub">Fontes, critérios de classificação e decisões metodológicas da base</div></div>';
+  html+='<div class="card met-secao"><h3>Sobre o painel</h3>'
+    +'<p>O painel reúne os indicadores dos três <b>Planos Regionais de Desenvolvimento 2024–2027</b>: PRDA (SUDAM), PRDCO (SUDECO) e PRDNE (SUDENE). A base tem '+IND.length+' registros no grão indicador × recorte: 65 conceitos de indicador e 5 linhas adicionais para os recortes por bioma e por UF do PRDCO.</p>'
+    +'<p>As linhas de base publicadas nos planos são preservadas como âncora documental. As séries observadas acrescentam valores oficiais posteriores sempre que definição, unidade e recorte territorial são compatíveis; quando não há continuação oficial, usa-se proxy reproduzível, identificada no status da observação. Os eixos foram padronizados pelo código (1 a 7), mantendo a denominação original de cada plano na tabela.</p></div>';
+  html+='<div class="card met-secao"><h3>Como a situação frente à meta é classificada</h3>'
+    +'<p>A classificação é feita pelo script <code>gerar_dados.py</code> a partir das abas Cobertura_calculo, Indicadores e Series_observadas. O progresso é a fração da distância entre a linha de base e a meta já percorrida: (valor mais recente − linha de base) ÷ (meta − linha de base).</p>'
+    +'<div class="met-grid">'+SIT.map(function(s){return '<div class="met-item" style="--c:'+sitCor(s.k)+'"><b>'+s.k+'</b><p>'+s.d+'</p></div>';}).join('')+'</div>'
+    +'<div class="met-grid" style="margin-top:10px"><div class="met-item"><b>PRDCO e PRDNE: metas em nível</b><p>A meta 2027 é comparada ao valor mais recente na mesma unidade, respeitando a polaridade. A direção desde a linha de base vem da base consolidada. Quando a observação mais recente não é comparável em nível (estoque versus incremento, por exemplo) ou só existe o valor do ano-base, o registro fica sem avaliação. O IDH do PRDCO usa a meta de 2030, única fixada no plano. Os quatro indicadores do Programa 5.1 do PRDNE não explicitam polaridade; como as metas dizem "Atingir X%", tratou-se "quanto maior, melhor".</p></div>'
+    +'<div class="met-item"><b>PRDA: metas de variação relativa</b><p>O PRDA publica o ano-base, mas não o valor da linha de base, e expressa as metas como variação anual (a soma das quatro metas anuais equivale à meta quadrienal, por exemplo +30%). O painel calcula a variação acumulada entre o valor observado no ano-base e o mais recente e a compara com a meta quadrienal. Quando a série não cobre o ano-base, o registro fica sem avaliação. Como parte dessas séries usa proxy, a leitura deve considerar a comparabilidade informada em cada indicador.</p></div></div></div>';
+  html+='<div class="card met-secao"><h3>Decisões metodológicas da base</h3><div class="tw"><table><thead><tr><th>Tema</th><th>Decisão</th><th>Justificativa</th></tr></thead><tbody>'
+    +D.metodologia.map(function(m){return '<tr><td><b>'+esc(m[0])+'</b></td><td>'+esc(m[1])+'</td><td>'+esc(m[2])+'</td></tr>';}).join('')+'</tbody></table></div></div>';
+  html+='<div class="card met-secao"><h3>Principais fontes das séries</h3><div class="tw"><table><thead><tr><th>Fonte</th><th>Indicadores atualizados</th><th>Período inicial usado</th></tr></thead><tbody>'
+    +D.defasagem.map(function(m){return '<tr><td><b>'+esc(m[0])+'</b></td><td>'+esc(m[1])+'</td><td>'+esc(m[2])+'</td></tr>';}).join('')+'</tbody></table></div></div>';
+  html+='<div class="card met-secao"><h3>Documentos de referência</h3><div class="tw"><table><thead><tr><th>Plano</th><th>Documento</th><th>Páginas / tabelas</th><th>Papel na base</th></tr></thead><tbody>'
+    +D.fontes.map(function(f){return '<tr><td>'+esc(f.plano)+'</td><td>'+(f.url_oficial?'<a href="'+esc(f.url_oficial)+'" target="_blank" rel="noopener">'+esc(f.documento)+'</a>':esc(f.documento))+'<div style="font-size:10.5px;color:var(--soft)">'+esc(f.observacao)+'</div></td><td>'+esc(f.paginas_indicadores)+'</td><td>'+esc(f.papel_na_base)+'</td></tr>';}).join('')+'</tbody></table></div>'
+    +'<p style="font-size:12px;color:var(--soft);margin-top:10px">Base completa: <a href="dados/Base_Indicadores_PRDs_Series_Observadas_2026.xlsx">Base_Indicadores_PRDs_Series_Observadas_2026.xlsx</a>.</p></div>';
+  main.innerHTML=html;
+}
+
+if(typeof Chart!=='undefined'){Chart.defaults.font.family="'Roboto',Arial,sans-serif";Chart.defaults.color='#666';}
+carregarDados();
+</script>
+</body>
+</html>
